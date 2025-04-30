@@ -52,6 +52,8 @@ echo "[+] Static URL & secret scrape"
 find "$OUT/dump" -type f \( -path '*/modules-wp5/*.js' -o -path '*/modules-roll/*.js' \) -print0 \
   | xargs -0 -P4 jsluice urls    > "$OUT/endpoints_static.json"
 
+find "$OUT/dump" -type f \( -path '*/modules-wp5/*.js' -o -path '*/modules-roll/*.js' \) -print0 \
+  | xargs -0 -P4 jsluice secrets > "$OUT/secrets_static.json"
 ################ 5. runtime trace ####
 echo "[+] Headless run for dynamic endpoints"
 if node "$TRACER" "$URL" "$OUT/endpoints_dyn.json"; then
@@ -65,10 +67,7 @@ fi
 echo "[+] Pre-filtering runtime noise"
 
 # ONE backslash for jq, nothing more
-FILTER_RE='\.(
-  png|jpe?g|gif|svg|webp|ico|bmp|tiff?|
-  woff2?|woff|ttf|otf|eot|css|mp3|mp4|scss|
-)(\?|$)'
+FILTER_RE='\\.(png|jpe?g|gif|svg|webp|ico|bmp|tiff?|woff2?|woff|ttf|otf|eot|css|mp3|mp4|scss)(\\?|$)'
 
 dynClean="$OUT/endpoints_dyn_clean.json"
 
