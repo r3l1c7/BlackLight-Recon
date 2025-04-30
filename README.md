@@ -39,3 +39,77 @@ npm i -g prettier
 
 ./scan.sh --url https://target.app \
           --header 'BugBounty-ID: hacker123'
+```
+---
+
+## 💡  What BlackLight does
+
+1. **Mirror** JavaScript only — honours any header you pass.  
+2. **Split** bundles:  
+   * Webpack 4/5 splitter → `modules-wp5/`  
+   * Rollup / Vite splitter → `modules-roll/`  
+3. **Prettify** for human diff (optional).  
+4. **AST scrape** → URLs + secrets.  
+5. **Headless trace** → grabs every runtime API with call-site stacks.  
+6. **Filter & merge** — drops `png|jpg|svg|woff|css`, de-dupes on `url + method`.  
+
+End result:  
+
+blacklight-scan-YYYYMMDD_HHMM/ ├─ endpoints_full.json ← de-duplicated STATIC + RUNTIME APIs └─ secrets_static.json ← hard-coded keys / tokens
+
+yaml
+Copy
+Edit
+
+---
+
+## 🛠️  Installation matrix
+
+| Component | Min. version | Notes |
+|-----------|--------------|-------|
+| **Node.js** | 18.x | Built-in `fetch`, ES 2022 |
+| **Puppeteer** | 19+ | Auto-downloads Chromium |
+| **jsluice** | latest | `go install …` |
+| **jq** | ≥ 1.6 | apt / brew / choco |
+| **Prettier** | any | optional but nice |
+
+---
+
+## 👾  Feature grid vs. the usual suspects
+
+| Capability | LinkFinder | JS Miner (Burp) | jsluice-raw | **BlackLight** |
+|------------|------------|-----------------|-------------|----------------|
+| Auto-split WP 5 numeric bundles | ✗ | ✗ | ✗ | **✓** |
+| Rollup / Vite splitter | ✗ | ✗ | ✗ | **✓** |
+| AST URL + secret scrape | △ regex | △ | **✓** | **✓** |
+| Runtime trace with stack lines | ✗ | ✗ | ✗ | **✓** |
+| Single header flag (`-H`) | ✗ | ✗ | ✗ | **✓** |
+| Built-in asset filter | ✗ | ✗ | ✗ | **✓** |
+| Ready for Burp import | ✗ | **✓** | ✗ | **✓** |
+
+*(△ = basic regex only)*
+
+---
+
+## 🛰️  Roadmap
+
+* WebSocket & EventSource capture  
+* Session-cookie replay for auth’d scans  
+* GitHub Action to diff deploy-to-deploy and ping Slack  
+* Burp Suite plug-in (JSON import → Sitemap)
+
+---
+
+### 🤝  Contributing
+
+Bug reports, PRs, and crazy feature ideas welcome!  
+Run `./dev/run-tests.sh` before pushing; CI enforces shell & Node lint.
+
+---
+
+## ⚖️  License
+
+MIT — burn bandwidth, **not** production creds ☠️  
+Big props to the **jsluice**, **Puppeteer**, and **Prettier** teams for the heavy lifting.
+
+> **BlackLight Recon** — because every SPA has stains you can only see under UV.
