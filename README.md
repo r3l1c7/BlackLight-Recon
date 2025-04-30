@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <img alt="CI badge" src="https://img.shields.io/github/actions/workflow/status/yourhandle/blacklight-recon/ci.yml?style=for-the-badge">
-  <img alt="License" src="https://img.shields.io/github/license/yourhandle/blacklight-recon?style=for-the-badge">
+  <img alt="CI badge" src="https://img.shields.io/github/actions/workflow/status/r3l1c7/blacklight-recon/ci.yml?style=for-the-badge">
+  <img alt="License" src="https://img.shields.io/github/license/r3l1c7/blacklight-recon?style=for-the-badge">
   <img alt="Lines of Bash" src="https://img.shields.io/badge/bash-~250 loc-4EAA25?style=for-the-badge">
 </p>
 
