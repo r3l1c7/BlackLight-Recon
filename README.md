@@ -36,7 +36,7 @@ npm i puppeteer --save-dev        # once: pulls headless Chrome
 go install github.com/BishopFox/jsluice/cmd/jsluice@latest
 sudo apt install jq wget          # Debian / Kali
 npm i -g prettier
-
+npm i -g @babel/cli @babel/core babel-plugin-transform-react-createelement-to-jsx
 ./scan.sh --url https://target.app \
           --header 'BugBounty-ID: hacker123'
 ```
