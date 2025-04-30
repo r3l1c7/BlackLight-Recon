@@ -22,7 +22,7 @@ ROOT="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &>/dev/null && pwd )"
 UNIVERSAL="$ROOT/unbundle-universal.mjs"
 ROLLUP="$ROOT/unbundle-roll.mjs"
 TRACER="$ROOT/runtime-trace.cjs"
-
+SMART="$ROOT/smart-rename.mjs"
 ################ 1. mirror ###########
 echo "[+] Mirroring JS assets"
 wget -q -E -H -k -p -r -l1 -nd -A '*.js,*.mjs' -P "$OUT/dump" "$URL"
@@ -34,19 +34,23 @@ find "$OUT/dump" -type f -name '*.js' -print0 | xargs -0 -P4 node "$ROLLUP"
 
 ################ 3. prettify #########
 echo "[+] Prettifying modules"
-mods=$(find "$OUT/dump" -type f \( -path '*/modules-wp5/*.js' -o -path '*/modules-roll/*.js' \))
-[[ -n "$mods" ]] && echo "$mods" | xargs -P4 prettier --write >/dev/null \
-                 || echo "    (!) No extracted modules found"
+find "$OUT/dump" -type f \( -path '*/modules-wp5/*.js' -o -path '*/modules-roll/*.js' \) -print0 \
+  | xargs -0 -P4 prettier --write >/dev/null \
+  || echo "    (!) No extracted modules found"
+
+################ 3.5 semantic rename #########
+echo "[+] Semantic de-minification"
+find "$OUT/dump" -type f \( -path '*/modules-wp5/*.js' -o -path '*/modules-roll/*.js' \) -print0 \
+  | xargs -0 -P4 node "$SMART" \
+      --out-dir "$OUT/dump" \
+      --map "$OUT/rename-map.json" \
+      --format --lint \
+  || echo "    (!) smart-rename failed"
 
 ################ 4. static scrape ####
 echo "[+] Static URL & secret scrape"
-if [[ -n "$mods" ]]; then
-  echo "$mods" | xargs -P4 jsluice urls    > "$OUT/endpoints_static.json"
-  echo "$mods" | xargs -P4 jsluice secrets > "$OUT/secrets_static.json"
-else
-  printf '[]\n' > "$OUT/endpoints_static.json"
-  printf '[]\n' > "$OUT/secrets_static.json"
-fi
+find "$OUT/dump" -type f \( -path '*/modules-wp5/*.js' -o -path '*/modules-roll/*.js' \) -print0 \
+  | xargs -0 -P4 jsluice urls    > "$OUT/endpoints_static.json"
 
 ################ 5. runtime trace ####
 echo "[+] Headless run for dynamic endpoints"
