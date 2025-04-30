@@ -4,65 +4,76 @@
 
 set -euo pipefail
 
-############ CLI ############
-URL=""; OUT="scan-$(date +%Y%m%d_%H%M%S)"; HDRS=()
+################ CLI ################
+URL=""; OUT="scan-$(date +%Y%m%d_%H%M%S)"
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -u|--url)    URL="$2"; shift 2 ;;
-    -o|--out)    OUT="$2"; shift 2 ;;
-    -H|--header) HDRS+=("$2"); shift 2 ;;          # <── NEW
+    -u|--url) URL="$2"; shift 2 ;;
+    -o|--out) OUT="$2"; shift 2 ;;
     *) echo "unknown flag $1"; exit 1 ;;
   esac
 done
-[[ -z "$URL" ]] && { echo "usage: scan.sh --url <target> [--header 'K: V']"; exit 1; }
+[[ -z "$URL" ]] && { echo "usage: scan.sh --url <target> [--out dir]"; exit 1; }
 
-############ paths ##########
+################ paths ##############
 mkdir -p "$OUT"/{dump,tmp}
 ROOT="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &>/dev/null && pwd )"
+
 UNIVERSAL="$ROOT/unbundle-universal.mjs"
 ROLLUP="$ROOT/unbundle-roll.mjs"
 TRACER="$ROOT/runtime-trace.cjs"
 
-############ 1. mirror JS ###
+################ 1. mirror ###########
 echo "[+] Mirroring JS assets"
-WGET_H=()
-for h in "${HDRS[@]}"; do WGET_H+=(--header "$h"); done
-wget -q -E -H -k -p -r -l1 -nd -A '*.js,*.mjs' "${WGET_H[@]}" -P "$OUT/dump" "$URL"
+wget -q -E -H -k -p -r -l1 -nd -A '*.js,*.mjs' -P "$OUT/dump" "$URL"
 
-############ 2 – 5 unchanged (de-bundle, prettify, static scrape) ############
-# … (keep exactly what you already have) …
+################ 2. de-bundle ########
+echo "[+] De-bundling Webpack, Rollup, esbuild"
+find "$OUT/dump" -type f -name '*.js' -print0 | xargs -0 -P4 node "$UNIVERSAL"
+find "$OUT/dump" -type f -name '*.js' -print0 | xargs -0 -P4 node "$ROLLUP"
 
-############ 5. runtime trace ############
+################ 3. prettify #########
+echo "[+] Prettifying modules"
+mods=$(find "$OUT/dump" -type f \( -path '*/modules-wp5/*.js' -o -path '*/modules-roll/*.js' \))
+[[ -n "$mods" ]] && echo "$mods" | xargs -P4 prettier --write >/dev/null \
+                 || echo "    (!) No extracted modules found"
+
+################ 4. static scrape ####
+echo "[+] Static URL & secret scrape"
+if [[ -n "$mods" ]]; then
+  echo "$mods" | xargs -P4 jsluice urls    > "$OUT/endpoints_static.json"
+  echo "$mods" | xargs -P4 jsluice secrets > "$OUT/secrets_static.json"
+else
+  printf '[]\n' > "$OUT/endpoints_static.json"
+  printf '[]\n' > "$OUT/secrets_static.json"
+fi
+
+################ 5. runtime trace ####
 echo "[+] Headless run for dynamic endpoints"
-node "$TRACER" "$URL" "$OUT/endpoints_dyn.json" "${HDRS[@]}" || {
+if node "$TRACER" "$URL" "$OUT/endpoints_dyn.json"; then
+  echo "( tracer OK )"
+else
   echo "    (!) Runtime trace failed – continuing with static only"
   printf '[]\n' > "$OUT/endpoints_dyn.json"
-}
+fi
 
-################ 5½. pre-filter dyn ############
-echo "[+] Pre-filtering runtime noise"
+################ 6. merge & filter ###
+command -v jq >/dev/null 2>&1 || { echo "ERROR: jq missing"; exit 1; }
+echo "[+] Merging static + dynamic -- removing img/font/style noise"
 
+#  ↓ add or tweak extensions here if you want more/less filtering
 FILTER_RE='\\.(png|jpe?g|gif|svg|webp|ico|bmp|tiff?|woff2?|woff|ttf|otf|eot|css)(\\?|$)'
 
-tmpDyn="$OUT/endpoints_dyn_clean.json"
-jq -R --arg re "$FILTER_RE" '
-  select(length>0)
-  | fromjson
-  | (if type=="array" then .[] else . end)
-  | select(.url | test($re;"i") | not)
-' "$OUT/endpoints_dyn.json" > "$tmpDyn"
-
-################ 6. merge  ######################
-echo "[+] Merging static + dynamic"
-
-cat   "$OUT/endpoints_static.json" "$tmpDyn" |
-jq -R '
-    select(length>0) | fromjson
-    | (if type=="array" then .[] else . end)
-' |
-jq -s 'unique_by(.url,.method)' \
-  > "$OUT/endpoints_full.json"
-
+cat "$OUT/endpoints_static.json" "$OUT/endpoints_dyn.json" \
+  | jq -c -R '
+      select(length>0)            |     # skip blanks
+      fromjson                    |     # parse each line
+      (if type=="array" then .[] else . end)  # flatten accidental arrays
+    ' \
+  | jq -s --arg re "$FILTER_RE" '
+      map(select(.url | test($re;"i") | not)) # drop assets
+    | unique_by(.url,.method)
+    ' > "$OUT/endpoints_full.json"
 
 ################ done ###############
 echo -e "\n🎉  Scan complete → $OUT/"
