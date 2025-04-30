@@ -57,23 +57,38 @@ else
   printf '[]\n' > "$OUT/endpoints_dyn.json"
 fi
 
-################ 6. merge & filter ###
-command -v jq >/dev/null 2>&1 || { echo "ERROR: jq missing"; exit 1; }
-echo "[+] Merging static + dynamic -- removing img/font/style noise"
+################ 5½  filter runtime #######################
+echo "[+] Pre-filtering runtime noise"
 
-#  ↓ add or tweak extensions here if you want more/less filtering
-FILTER_RE='\\.(png|jpe?g|gif|svg|webp|ico|bmp|tiff?|woff2?|woff|ttf|otf|eot|css)(\\?|$)'
+# ONE backslash for jq, nothing more
+FILTER_RE='\.(
+  png|jpe?g|gif|svg|webp|ico|bmp|tiff?|
+  woff2?|woff|ttf|otf|eot|css|mp3|mp4|scss|
+)(\?|$)'
 
-cat "$OUT/endpoints_static.json" "$OUT/endpoints_dyn.json" \
-  | jq -c -R '
-      select(length>0)            |     # skip blanks
-      fromjson                    |     # parse each line
-      (if type=="array" then .[] else . end)  # flatten accidental arrays
-    ' \
-  | jq -s --arg re "$FILTER_RE" '
-      map(select(.url | test($re;"i") | not)) # drop assets
-    | unique_by(.url,.method)
-    ' > "$OUT/endpoints_full.json"
+dynClean="$OUT/endpoints_dyn_clean.json"
+
+jq -R -c --arg re "$FILTER_RE" '
+  select(length>0)
+  | fromjson
+  | (if type=="array" then .[] else . end)
+  | select(.url | test($re;"i") | not)      # drop images / fonts / styles
+'  "$OUT/endpoints_dyn.json" > "$dynClean"
+
+################ 6  merge static + dyn ####################
+echo "[+] Merging static + dynamic"
+
+[ -s "$OUT/endpoints_static.json" ] || : > "$OUT/endpoints_static.json"
+
+cat  "$OUT/endpoints_static.json" "$dynClean" |
+jq  -R -c '
+  select(length>0)
+  | fromjson
+  | (if type=="array" then .[] else . end)
+' |
+jq  -s -c 'unique_by(.url,.method)' \
+    > "$OUT/endpoints_full.json"
+
 
 ################ done ###############
 echo -e "\n🎉  Scan complete → $OUT/"
