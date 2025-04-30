@@ -30,7 +30,7 @@
 ## 🚀  TL;DR — one-liner
 
 ```bash
-git clone https://github.com/yourhandle/blacklight-recon.git
+git clone https://github.com/r3l1c7/blacklight-recon.git
 cd blacklight-recon
 npm i puppeteer --save-dev        # once: pulls headless Chrome
 go install github.com/BishopFox/jsluice/cmd/jsluice@latest
