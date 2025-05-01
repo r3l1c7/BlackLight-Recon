@@ -45,12 +45,24 @@ fi
 
 ################ 3.5 semantic rename #########
 echo "[+] Semantic de-minification"
-find "$OUT/dump" -type f \( -path '*/modules-wp5/*.js' -o -path '*/modules-roll/*.js' \) -print0 \
-  | xargs -0 -P4 node "$SMART" \
-      --out-dir "$OUT/dump" \
-      --map "$OUT/rename-map.json" \
-      --format --lint \
-  || echo "    (!) smart-rename failed"
+if find "$OUT/dump" -type f \( \
+      -path '*/modules-wp5/*.js' -o \
+      -path '*/modules-roll/*.js' \
+   \) | grep -q .; then
+
+  find "$OUT/dump" -type f \( \
+      -path '*/modules-wp5/*.js' -o \
+      -path '*/modules-roll/*.js' \
+   \) -print0 \
+    | xargs -0 -P4 node "$SMART" \
+        --out-dir "$OUT/dump" \
+        --map "$OUT/rename-map.json" \
+        --format --lint \
+    || echo "    (!) smart-rename failed"
+
+else
+  echo "    (!) No extracted modules found for semantic de-minification"
+fi
 
 ################ 4. static scrape ####
 echo "[+] Static URL & secret scrape"
