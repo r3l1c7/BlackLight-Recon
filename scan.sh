@@ -34,9 +34,14 @@ find "$OUT/dump" -type f -name '*.js' -print0 | xargs -0 -P4 node "$ROLLUP"
 
 ################ 3. prettify #########
 echo "[+] Prettifying modules"
-find "$OUT/dump" -type f \( -path '*/modules-wp5/*.js' -o -path '*/modules-roll/*.js' \) -print0 \
-  | xargs -0 -P4 prettier --write >/dev/null \
-  || echo "    (!) No extracted modules found"
+# only prettify if there are modules
+if find "$OUT/dump" -type f \( -path '*/modules-wp5/*.js' -o -path '*/modules-roll/*.js' \) | grep -q .; then
+  find "$OUT/dump" -type f \( -path '*/modules-wp5/*.js' -o -path '*/modules-roll/*.js' \) -print0 \
+    | xargs -0 -P4 prettier --write
+else
+  echo "    (!) No extracted modules found"
+fi
+
 
 ################ 3.5 semantic rename #########
 echo "[+] Semantic de-minification"
