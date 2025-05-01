@@ -174,7 +174,12 @@ const progress = !REVIEW && new SingleBar({format:"{bar} {value}/{total} files"}
 if(progress) progress.start(files.length,0);
 
 let totalRen=0;
-let linter=null; if(LINT) linter=new (await getESLint)({fix:true});
+let linter = null;
+if (LINT) {
+  const ESLintClass = await getESLint();
+  linter = new ESLintClass({ fix: true });
+}
+
 
 for(const file of files){
   const src=fs.readFileSync(file,"utf8");
