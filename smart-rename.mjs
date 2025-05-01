@@ -44,7 +44,18 @@ const labelVecs = ftModel ? {} : null;
 ////////////////////////////////////////////////////////////////////////////////
 const argv   = process.argv.slice(2);
 const flags  = new Set(argv.filter(a=>a.startsWith("--")));
-const files  = argv.filter(a=>!a.startsWith("--"));
+
+// only treat real JS files as “files” — skip flags, their values, directories, etc.
+let files = argv.filter(arg => {
+  if (arg.startsWith("--")) return false;
+  try {
+    const stat = fs.statSync(arg);
+    // only keep real files ending in .js/.mjs
+    return stat.isFile() && /\.(m?js)$/.test(arg);
+  } catch {
+    return false;
+  }
+});
 if (!files.length) {
   console.error("usage: node smart-rename.mjs <file …> [flags]\n"
   + "  --out-dir dir      write outputs there (else in-place)\n"
