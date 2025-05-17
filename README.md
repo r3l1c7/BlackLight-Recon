@@ -39,7 +39,7 @@ npm i -g prettier chalk diff cli-progress
 npm install --save-dev eslint
 npm i -g @babel/cli @babel/core @babel/types @babel/parser @babel/generator @babel/traverse babel-plugin-transform-react-createelement-to-jsx
 ./scan.sh --url https://target.app \
-          --header 'BugBounty-ID: hacker123'
+          --header 'BugBounty-ID: hacker123'  # repeat -H for multiple headers
 ```
 ---
 

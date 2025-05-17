@@ -1,19 +1,24 @@
 #!/usr/bin/env bash
 # scan.sh – one-shot JS bundle scanner (Webpack + Rollup/Vite)
-# usage: ./scan.sh --url https://target.tld [--out outDir]
+# usage: ./scan.sh --url https://target.tld [--out outDir] [-H 'K: V']...
+#         (-H/--header can be repeated)
 
 set -euo pipefail
 
 ################ CLI ################
-URL=""; OUT="scan-$(date +%Y%m%d_%H%M%S)"
+URL=""; OUT="scan-$(date +%Y%m%d_%H%M%S)"; HEADERS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -u|--url) URL="$2"; shift 2 ;;
     -o|--out) OUT="$2"; shift 2 ;;
+    -H|--header) HEADERS+=("$2"); shift 2 ;;
     *) echo "unknown flag $1"; exit 1 ;;
   esac
 done
-[[ -z "$URL" ]] && { echo "usage: scan.sh --url <target> [--out dir]"; exit 1; }
+[[ -z "$URL" ]] && {
+  echo "usage: scan.sh --url <target> [--out dir] [-H 'K: V']...";
+  exit 1;
+}
 
 ################ paths ##############
 mkdir -p "$OUT"/{dump,tmp}
@@ -26,7 +31,11 @@ SMART="$ROOT/smart-rename.mjs"
 
 ################ 1. mirror ###########
 echo "[+] Mirroring JS assets"
-wget -q -E -H -k -p -r -l1 -nd -A '*.js,*.mjs' -P "$OUT/dump" "$URL"
+WGET_OPTS=()
+for h in "${HEADERS[@]}"; do
+  WGET_OPTS+=(--header="$h")
+done
+wget -q -E -H -k -p -r -l1 -nd -A '*.js,*.mjs' "${WGET_OPTS[@]}" -P "$OUT/dump" "$URL"
 
 ################ 2. de-bundle ########
 echo "[+] De-bundling Webpack, Rollup, esbuild"
@@ -73,7 +82,11 @@ fi
 
 ################ 5. runtime trace ####
 echo "[+] Headless run for dynamic endpoints"
-if node "$TRACER" "$URL" "$OUT/endpoints_dyn.json"; then
+TRACER_OPTS=()
+for h in "${HEADERS[@]}"; do
+  TRACER_OPTS+=(--header "$h")
+done
+if node "$TRACER" "$URL" "$OUT/endpoints_dyn.json" "${TRACER_OPTS[@]}"; then
   echo "( tracer OK )"
 else
   echo "    (!) Runtime trace failed – continuing with static only"
