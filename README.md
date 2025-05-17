@@ -39,7 +39,8 @@ npm i -g prettier chalk diff cli-progress
 npm install --save-dev eslint
 npm i -g @babel/cli @babel/core @babel/types @babel/parser @babel/generator @babel/traverse babel-plugin-transform-react-createelement-to-jsx
 ./scan.sh --url https://target.app \
-          --header 'BugBounty-ID: hacker123'
+          --header 'BugBounty-ID: hacker123'  # repeat -H for multiple headers \
+          --regex 'api/v[0-9]'
 ```
 ---
 
@@ -52,7 +53,8 @@ npm i -g @babel/cli @babel/core @babel/types @babel/parser @babel/generator @bab
 3. **Prettify** for human diff (optional).  
 4. **AST scrape** → URLs + secrets.  
 5. **Headless trace** → grabs every runtime API with call-site stacks.  
-6. **Filter & merge** — drops `png|jpg|svg|woff|css`, de-dupes on `url + method`.  
+6. **Filter & merge** — drops `png|jpg|svg|woff|css`, optional `--regex` on URLs,
+   de-dupes on `url + method` while tallying hits.
 
 End result:  
 
