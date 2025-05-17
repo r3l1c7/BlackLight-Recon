@@ -1,19 +1,25 @@
 #!/usr/bin/env bash
 # scan.sh – one-shot JS bundle scanner (Webpack + Rollup/Vite)
-# usage: ./scan.sh --url https://target.tld [--out outDir]
+# usage: ./scan.sh --url https://target.tld [--out outDir] [-H 'K: V']...
+#         [-r 'endpoint-regex']  (-H/--header can be repeated)
 
 set -euo pipefail
 
 ################ CLI ################
-URL=""; OUT="scan-$(date +%Y%m%d_%H%M%S)"
+URL=""; OUT="scan-$(date +%Y%m%d_%H%M%S)"; HEADERS=(); MATCH_RE=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -u|--url) URL="$2"; shift 2 ;;
     -o|--out) OUT="$2"; shift 2 ;;
+    -H|--header) HEADERS+=("$2"); shift 2 ;;
+    -r|--regex) MATCH_RE="$2"; shift 2 ;;
     *) echo "unknown flag $1"; exit 1 ;;
   esac
 done
-[[ -z "$URL" ]] && { echo "usage: scan.sh --url <target> [--out dir]"; exit 1; }
+[[ -z "$URL" ]] && {
+  echo "usage: scan.sh --url <target> [--out dir] [-H 'K: V']... [-r 're']";
+  exit 1;
+}
 
 ################ paths ##############
 mkdir -p "$OUT"/{dump,tmp}
@@ -26,7 +32,11 @@ SMART="$ROOT/smart-rename.mjs"
 
 ################ 1. mirror ###########
 echo "[+] Mirroring JS assets"
-wget -q -E -H -k -p -r -l1 -nd -A '*.js,*.mjs' -P "$OUT/dump" "$URL"
+WGET_OPTS=()
+for h in "${HEADERS[@]}"; do
+  WGET_OPTS+=(--header="$h")
+done
+wget -q -E -H -k -p -r -l1 -nd -A '*.js,*.mjs' "${WGET_OPTS[@]}" -P "$OUT/dump" "$URL"
 
 ################ 2. de-bundle ########
 echo "[+] De-bundling Webpack, Rollup, esbuild"
@@ -71,9 +81,24 @@ else
   printf '%s\0' $raw | xargs -0 -P4 jsluice secrets > "$OUT/secrets_static.json"
 fi
 
+if [[ -n "$MATCH_RE" ]]; then
+  mv "$OUT/endpoints_static.json" "$OUT/endpoints_static.raw"
+  jq -R -c --arg re "$MATCH_RE" '
+    select(length>0)
+    | fromjson
+    | (if type=="array" then .[] else . end)
+    | select(.url | test($re;"i"))
+  ' "$OUT/endpoints_static.raw" > "$OUT/endpoints_static.json"
+  rm "$OUT/endpoints_static.raw"
+fi
+
 ################ 5. runtime trace ####
 echo "[+] Headless run for dynamic endpoints"
-if node "$TRACER" "$URL" "$OUT/endpoints_dyn.json"; then
+TRACER_OPTS=()
+for h in "${HEADERS[@]}"; do
+  TRACER_OPTS+=(--header "$h")
+done
+if node "$TRACER" "$URL" "$OUT/endpoints_dyn.json" "${TRACER_OPTS[@]}"; then
   echo "( tracer OK )"
 else
   echo "    (!) Runtime trace failed – continuing with static only"
@@ -87,11 +112,13 @@ FILTER_RE='\\.(png|jpe?g|gif|svg|webp|ico|bmp|tiff?|woff2?|woff|ttf|otf|eot|css|
 
 dynClean="$OUT/endpoints_dyn_clean.json"
 
-jq -R -c --arg re "$FILTER_RE" '
+jq -R -c --arg re "$FILTER_RE" --arg match "$MATCH_RE" '
   select(length>0)
   | fromjson
   | (if type=="array" then .[] else . end)
   | select(.url | test($re;"i") | not)
+  | select($match == "" or (.url | test($match;"i")))
+  | .source = "dynamic"
 '  "$OUT/endpoints_dyn.json" > "$dynClean"
 
 ################ 6  merge static + dyn ####################
@@ -99,14 +126,25 @@ echo "[+] Merging static + dynamic"
 
 [ -s "$OUT/endpoints_static.json" ] || : > "$OUT/endpoints_static.json"
 
-cat  "$OUT/endpoints_static.json" "$dynClean" |
-jq  -R -c '
+cat "$OUT/endpoints_static.json" "$dynClean" |
+jq -R -c --arg src "static" --arg match "$MATCH_RE" '
   select(length>0)
   | fromjson
   | (if type=="array" then .[] else . end)
+  | select($match == "" or (.url | test($match;"i")))
+  | .source = (.source // $src)
 ' |
-jq  -s -c 'unique_by(.url,.method)' \
-    > "$OUT/endpoints_full.json"
+jq -s -c '
+  reduce .[] as $e ({};
+    ($e.method //= "GET") |
+    ($e.url + "|" + $e.method) as $k |
+    (.[$k] //= {url: $e.url, method: $e.method, sources: [], stacks: [], count:0}) |
+    .[$k].sources |= (. + [$e.source] | unique) |
+    .[$k].count += 1 |
+    if $e.stack then .[$k].stacks += [$e.stack] else . end
+  ) |
+  [.[]]
+' > "$OUT/endpoints_full.json"
 
 ################ done ###############
 echo -e "\n🎉  Scan complete → $OUT/"
